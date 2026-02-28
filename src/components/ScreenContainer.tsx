@@ -7,9 +7,17 @@ import { colors } from '../theme/colors';
 type ScreenContainerProps = PropsWithChildren<{
   title: string;
   subtitle?: string;
+  contentVariant?: 'card' | 'plain';
+  hideHeader?: boolean;
 }>;
 
-export function ScreenContainer({ title, subtitle, children }: ScreenContainerProps) {
+export function ScreenContainer({
+  title,
+  subtitle,
+  contentVariant = 'card',
+  hideHeader = false,
+  children,
+}: ScreenContainerProps) {
   const insets = useSafeAreaInsets();
 
   return (
@@ -22,9 +30,17 @@ export function ScreenContainer({ title, subtitle, children }: ScreenContainerPr
         },
       ]}
     >
-      <Text style={styles.title}>{title}</Text>
-      {subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
-      <View style={styles.content}>{children}</View>
+      {!hideHeader ? <Text style={styles.title}>{title}</Text> : null}
+      {!hideHeader && subtitle ? <Text style={styles.subtitle}>{subtitle}</Text> : null}
+      <View
+        style={[
+          styles.contentBase,
+          hideHeader && styles.contentNoHeader,
+          contentVariant === 'card' ? styles.contentCard : styles.contentPlain,
+        ]}
+      >
+        {children}
+      </View>
     </View>
   );
 }
@@ -45,13 +61,21 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: colors.mutedText,
   },
-  content: {
+  contentBase: {
     marginTop: 12,
     flex: 1,
+  },
+  contentNoHeader: {
+    marginTop: 0,
+  },
+  contentCard: {
     borderRadius: 16,
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderWidth: 1,
     padding: 16,
+  },
+  contentPlain: {
+    padding: 0,
   },
 });

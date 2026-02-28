@@ -34,13 +34,22 @@ function buildGlobeHtml(visitedCountries: string[]) {
     <script>
       const visited = ${visitedJson};
       const world = ${worldGeoJson};
-      const visitedSet = new Set(visited.map((country) => country.toLowerCase()));
+      const normalizeCountryName = (name) => {
+        const normalized = (name || '').trim().toLowerCase();
+        if (normalized === 'cape verde' || normalized === 'cabo verde') return 'cape verde';
+        return normalized;
+      };
+
+      const visitedSet = new Set(visited.map((country) => normalizeCountryName(country)));
 
       const container = document.getElementById('globeViz');
       const globe = Globe({ rendererConfig: { logarithmicDepthBuffer: true } })(container)
         .backgroundColor('#f8fafc')
         .showGlobe(true)
         .showAtmosphere(false);
+
+      // Start with a closer camera so the globe appears larger on first render.
+      globe.pointOfView({ lat: 20, lng: 0, altitude: 1.5 }, 0);
 
       const tuneCameraForDepthPrecision = () => {
         const camera = globe.camera && globe.camera();
@@ -86,19 +95,18 @@ function buildGlobeHtml(visitedCountries: string[]) {
         .polygonsData((world && world.features) || [])
         .polygonCapColor((feature) => {
           const countryName = getCountryName(feature);
-          return visitedSet.has(countryName.toLowerCase()) ? '#2563eb' : '#9ca3af';
+          return visitedSet.has(normalizeCountryName(countryName)) ? '#2563eb' : '#9ca3af';
         })
-        .polygonSideColor(() => 'rgba(55, 65, 81, 0.25)')
+        .polygonSideColor(() => 'rgba(0, 0, 0, 0)')
         .polygonStrokeColor(() => '#e5e7eb')
         .polygonAltitude((feature) => {
           const countryName = getCountryName(feature);
-          const baseAltitude = visitedSet.has(countryName.toLowerCase()) ? 0.014 : 0.006;
+          const baseAltitude = 0.006;
           return baseAltitude + altitudeNudge(countryName);
         })
         .polygonLabel((feature) => {
           const countryName = getCountryName(feature) || 'Unknown';
-          const visitedLabel = visitedSet.has(countryName.toLowerCase()) ? 'Visited' : 'Not visited';
-          return '<b>' + countryName + '</b><br/>' + visitedLabel;
+          return '<b>' + countryName + '</b>';
         });
 
       const stabilizePolygonDepth = () => {
@@ -180,10 +188,7 @@ export function VisitedGlobe({ visitedCountries }: VisitedGlobeProps) {
 const styles = StyleSheet.create({
   wrapper: {
     height: 340,
-    borderRadius: 14,
     overflow: 'hidden',
-    borderWidth: 1,
-    borderColor: '#d1d5db',
     backgroundColor: '#f8fafc',
   },
   webview: {

@@ -1,5 +1,7 @@
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 
+import { VisitedFlatMap } from '../components/VisitedFlatMap';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { VisitedGlobe } from '../components/VisitedGlobe';
 import { colors } from '../theme/colors';
@@ -11,24 +13,45 @@ const countriesVisited = [
   'Germany',
   'Spain',
   'Japan',
+  'Cape Verde',
 ];
 
 export function MapScreen() {
+  const [mapMode, setMapMode] = useState<'globe' | 'flat'>('globe');
+
   return (
     <ScreenContainer
       title="Map"
-      subtitle="Countries you have visited will be highlighted here."
+      contentVariant="plain"
+      hideHeader
     >
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <VisitedGlobe visitedCountries={countriesVisited} />
+      <View style={styles.content}>
+        <View style={styles.mapFullBleed}>
+          {mapMode === 'globe' ? (
+            <VisitedGlobe visitedCountries={countriesVisited} />
+          ) : (
+            <VisitedFlatMap visitedCountries={countriesVisited} />
+          )}
+        </View>
 
-        <Text style={styles.mapSubText}>
-          Drag to rotate. Pinch to zoom. Blue countries are visited.
-        </Text>
+        <View style={styles.modeSwitch}>
+          <Pressable
+            style={[styles.modeButton, mapMode === 'globe' && styles.modeButtonActive]}
+            onPress={() => setMapMode('globe')}
+          >
+            <Text style={[styles.modeButtonText, mapMode === 'globe' && styles.modeButtonTextActive]}>
+              Globe
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.modeButton, mapMode === 'flat' && styles.modeButtonActive]}
+            onPress={() => setMapMode('flat')}
+          >
+            <Text style={[styles.modeButtonText, mapMode === 'flat' && styles.modeButtonTextActive]}>
+              Flat
+            </Text>
+          </Pressable>
+        </View>
 
         <Text style={styles.sectionTitle}>Visited (sample)</Text>
         <View style={styles.chipsContainer}>
@@ -38,25 +61,47 @@ export function MapScreen() {
             </View>
           ))}
         </View>
-      </ScrollView>
+      </View>
     </ScreenContainer>
   );
 }
 
 const styles = StyleSheet.create({
-  scroll: {
+  content: {
     flex: 1,
   },
-  scrollContent: {
-    paddingBottom: 8,
+  mapFullBleed: {
+    marginTop: -12,
+    marginHorizontal: -20,
   },
-  mapSubText: {
+  modeSwitch: {
     marginTop: 10,
-    marginBottom: 12,
+    marginBottom: 10,
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    backgroundColor: '#e5e7eb',
+    borderRadius: 999,
+    padding: 4,
+    gap: 4,
+  },
+  modeButton: {
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+  },
+  modeButtonActive: {
+    backgroundColor: colors.surface,
+  },
+  modeButtonText: {
     fontSize: 13,
+    fontWeight: '600',
     color: colors.mutedText,
   },
+  modeButtonTextActive: {
+    color: colors.text,
+  },
   sectionTitle: {
+    marginTop: 12,
     fontSize: 16,
     fontWeight: '600',
     marginBottom: 10,
