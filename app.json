@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "GlobeGram",
+    "slug": "globegram",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.globegram.app"
+    },
+    "android": {
+      "package": "com.globegram.app"
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
