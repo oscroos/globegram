@@ -5,6 +5,7 @@ import worldGeoJsonData from '../data/world.json';
 
 type VisitedGlobeProps = {
   visitedCountries: string[];
+  height?: number;
 };
 
 function buildGlobeHtml(visitedCountries: string[]) {
@@ -23,7 +24,7 @@ function buildGlobeHtml(visitedCountries: string[]) {
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #f8fafc;
+        background: #f6f8fb;
       }
     </style>
     <script src="https://unpkg.com/three@0.157.0/build/three.min.js"></script>
@@ -44,12 +45,12 @@ function buildGlobeHtml(visitedCountries: string[]) {
 
       const container = document.getElementById('globeViz');
       const globe = Globe({ rendererConfig: { logarithmicDepthBuffer: true } })(container)
-        .backgroundColor('#f8fafc')
+        .backgroundColor('#f6f8fb')
         .showGlobe(true)
         .showAtmosphere(false);
 
       // Start with a closer camera so the globe appears larger on first render.
-      globe.pointOfView({ lat: 20, lng: 0, altitude: 1.5 }, 0);
+      globe.pointOfView({ lat: 20, lng: 0, altitude: 2.0 }, 0);
 
       const tuneCameraForDepthPrecision = () => {
         const camera = globe.camera && globe.camera();
@@ -163,7 +164,10 @@ function buildGlobeHtml(visitedCountries: string[]) {
   `;
 }
 
-export function VisitedGlobe({ visitedCountries }: VisitedGlobeProps) {
+export function VisitedGlobe({
+  visitedCountries,
+  height = 340,
+}: VisitedGlobeProps) {
   const source = useMemo(
     () => ({
       html: buildGlobeHtml(visitedCountries),
@@ -173,7 +177,7 @@ export function VisitedGlobe({ visitedCountries }: VisitedGlobeProps) {
   );
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { height }]}>
       <WebView
         source={source}
         originWhitelist={['*']}
@@ -189,7 +193,7 @@ const styles = StyleSheet.create({
   wrapper: {
     height: 340,
     overflow: 'hidden',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f8fb',
   },
   webview: {
     flex: 1,

@@ -15,6 +15,7 @@ const countriesVisited = [
   'Japan',
   'Cape Verde',
 ];
+const MAP_HEIGHT = 390;
 
 export function MapScreen() {
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('globe');
@@ -27,30 +28,44 @@ export function MapScreen() {
     >
       <View style={styles.content}>
         <View style={styles.mapFullBleed}>
+          <View style={styles.mapOverlaySwitch}>
+            <View style={styles.modeSwitch}>
+              <Pressable
+                style={[styles.modeButton, mapMode === 'globe' && styles.modeButtonActive]}
+                onPress={() => setMapMode('globe')}
+              >
+                <Text style={[styles.modeButtonText, mapMode === 'globe' && styles.modeButtonTextActive]}>
+                  Globe
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modeButton, mapMode === 'flat' && styles.modeButtonActive]}
+                onPress={() => setMapMode('flat')}
+              >
+                <Text style={[styles.modeButtonText, mapMode === 'flat' && styles.modeButtonTextActive]}>
+                  Map
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+
           {mapMode === 'globe' ? (
-            <VisitedGlobe visitedCountries={countriesVisited} />
+            <View style={styles.globeOffset}>
+              <VisitedGlobe visitedCountries={countriesVisited} height={MAP_HEIGHT} />
+            </View>
           ) : (
-            <VisitedFlatMap visitedCountries={countriesVisited} />
+            <VisitedFlatMap visitedCountries={countriesVisited} height={MAP_HEIGHT} />
           )}
         </View>
 
-        <View style={styles.modeSwitch}>
-          <Pressable
-            style={[styles.modeButton, mapMode === 'globe' && styles.modeButtonActive]}
-            onPress={() => setMapMode('globe')}
-          >
-            <Text style={[styles.modeButtonText, mapMode === 'globe' && styles.modeButtonTextActive]}>
-              Globe
-            </Text>
-          </Pressable>
-          <Pressable
-            style={[styles.modeButton, mapMode === 'flat' && styles.modeButtonActive]}
-            onPress={() => setMapMode('flat')}
-          >
-            <Text style={[styles.modeButtonText, mapMode === 'flat' && styles.modeButtonTextActive]}>
-              Flat
-            </Text>
-          </Pressable>
+        <View style={styles.legendRow}>
+          <View style={styles.legendLeft}>
+            <View style={styles.legendSwatch} />
+            <Text style={styles.legendText}>Visited</Text>
+            <Pressable style={({ pressed }) => [styles.friendButton, pressed && styles.friendButtonPressed]}>
+              <Text style={styles.friendButtonText}>+ compare</Text>
+            </Pressable>
+          </View>
         </View>
 
         <Text style={styles.sectionTitle}>Visited (sample)</Text>
@@ -71,23 +86,34 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   mapFullBleed: {
-    marginTop: -12,
+    marginTop: -24,
     marginHorizontal: -20,
   },
+  mapOverlaySwitch: {
+    position: 'absolute',
+    top: 10,
+    left: 0,
+    right: 0,
+    zIndex: 2,
+    alignItems: 'center',
+  },
+  globeOffset: {
+    marginTop: 0,
+  },
   modeSwitch: {
-    marginTop: 10,
-    marginBottom: 10,
-    alignSelf: 'flex-start',
     flexDirection: 'row',
-    backgroundColor: '#e5e7eb',
+    backgroundColor: 'rgba(229, 231, 235, 0.8)',
     borderRadius: 999,
-    padding: 4,
+    padding: 3,
     gap: 4,
   },
   modeButton: {
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
+    minWidth: 78,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
   },
   modeButtonActive: {
     backgroundColor: colors.surface,
@@ -106,6 +132,44 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 10,
     color: colors.text,
+  },
+  legendRow: {
+    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  legendLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  legendSwatch: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: '#2563eb',
+  },
+  legendText: {
+    fontSize: 13,
+    color: colors.mutedText,
+    fontWeight: '600',
+  },
+  friendButton: {
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  friendButtonPressed: {
+    backgroundColor: '#f3f4f6',
+    borderColor: '#d1d5db',
+  },
+  friendButtonText: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '600',
   },
   chipsContainer: {
     flexDirection: 'row',

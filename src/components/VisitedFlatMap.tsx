@@ -6,6 +6,7 @@ import worldGeoJsonData from '../data/world.json';
 
 type VisitedFlatMapProps = {
   visitedCountries: string[];
+  height?: number;
 };
 
 function buildFlatMapHtml(visitedCountries: string[]) {
@@ -24,13 +25,20 @@ function buildFlatMapHtml(visitedCountries: string[]) {
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #f8fafc;
+        background: #f6f8fb;
         touch-action: none;
       }
       svg {
         width: 100%;
         height: 100%;
         display: block;
+        opacity: 0;
+        transform: translateY(6px);
+        transition: opacity 420ms ease, transform 420ms ease;
+      }
+      svg.ready {
+        opacity: 1;
+        transform: translateY(0);
       }
       .tooltip {
         position: absolute;
@@ -68,6 +76,7 @@ function buildFlatMapHtml(visitedCountries: string[]) {
       const POLAR_X_STRETCH = 0.5;
       const POLAR_Y_STRETCH = 0.5;
       const HORIZONTAL_MAP_PADDING = 10;
+      const UNVISITED_TILE_COLOR = '#b3bac6';
       let viewportWidth = 0;
       let viewportHeight = 0;
       let mapMinX = 0;
@@ -173,7 +182,7 @@ function buildFlatMapHtml(visitedCountries: string[]) {
           .join('path')
           .attr('class', 'country')
           .attr('d', polarPath)
-          .attr('fill', (d) => visitedSet.has(getCountryName(d)) ? '#2563eb' : '#9ca3af')
+          .attr('fill', (d) => visitedSet.has(getCountryName(d)) ? '#2563eb' : UNVISITED_TILE_COLOR)
           .attr('stroke', '#e5e7eb')
           .attr('stroke-width', 0.45)
           .attr('vector-effect', 'non-scaling-stroke')
@@ -274,6 +283,9 @@ function buildFlatMapHtml(visitedCountries: string[]) {
       });
 
       render();
+      requestAnimationFrame(() => {
+        svg.classed('ready', true);
+      });
       window.addEventListener('resize', render);
     </script>
   </body>
@@ -281,7 +293,7 @@ function buildFlatMapHtml(visitedCountries: string[]) {
   `;
 }
 
-export function VisitedFlatMap({ visitedCountries }: VisitedFlatMapProps) {
+export function VisitedFlatMap({ visitedCountries, height = 340 }: VisitedFlatMapProps) {
   const source = useMemo(
     () => ({
       html: buildFlatMapHtml(visitedCountries),
@@ -291,7 +303,7 @@ export function VisitedFlatMap({ visitedCountries }: VisitedFlatMapProps) {
   );
 
   return (
-    <View style={styles.wrapper}>
+    <View style={[styles.wrapper, { height }]}>
       <WebView
         source={source}
         originWhitelist={['*']}
@@ -307,7 +319,7 @@ const styles = StyleSheet.create({
   wrapper: {
     height: 340,
     overflow: 'hidden',
-    backgroundColor: '#f8fafc',
+    backgroundColor: '#f6f8fb',
   },
   webview: {
     flex: 1,
