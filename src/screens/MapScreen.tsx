@@ -17,6 +17,7 @@ const countriesVisited = [
   'Japan',
   'Cape Verde',
 ];
+
 const MAP_HEIGHT = 390;
 const REGION_OPTIONS = ['World', 'Europe', 'North America', 'South America', 'Asia', 'Africa', 'Oceania'];
 const FRIENDS = [
@@ -28,7 +29,7 @@ const FRIENDS = [
   {
     id: 'friend-2',
     name: 'Marcus',
-    visitedCountries: ['Germany', 'Spain', 'Portugal', 'Mexico', 'United States of America', 'Argentina'],
+    visitedCountries: ['Germany', 'Spain', 'Portugal', 'Mexico', 'United States of America', 'Argentina', 'Sweden'],
   },
   {
     id: 'friend-3',
@@ -36,7 +37,6 @@ const FRIENDS = [
     visitedCountries: ['Sweden', 'Denmark', 'United Kingdom', 'India', 'South Africa', 'Australia'],
   },
 ];
-type VisitStatus = 'none' | 'user' | 'friend' | 'both';
 
 type WorldFeature = {
   properties?: {
@@ -58,28 +58,36 @@ function getCountryName(feature: WorldFeature) {
   return (properties?.NAME || properties?.ADMIN || properties?.name || properties?.NAME_LONG || '').trim();
 }
 
+function buildVisitedSet(countries: string[]) {
+  return new Set(countries.map((country) => normalizeCountryName(country)));
+}
+
 export function MapScreen() {
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('globe');
   const [countryGroup, setCountryGroup] = useState('World');
   const [isRegionMenuOpen, setIsRegionMenuOpen] = useState(false);
   const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
-  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
 
-  const selectedFriend = useMemo(
-    () => FRIENDS.find((friend) => friend.id === selectedFriendId) || null,
-    [selectedFriendId]
-  );
-
-  const visitedSet = useMemo(
-    () => new Set(countriesVisited.map((country) => normalizeCountryName(country))),
-    []
-  );
-  const friendVisitedSet = useMemo(
+  const selectedFriends = useMemo(
     () =>
-      new Set(
-        (selectedFriend?.visitedCountries || []).map((country) => normalizeCountryName(country))
-      ),
-    [selectedFriend]
+      selectedFriendIds
+        .map((id) => FRIENDS.find((friend) => friend.id === id))
+        .filter((friend): friend is (typeof FRIENDS)[number] => Boolean(friend)),
+    [selectedFriendIds]
+  );
+
+  const firstFriend = selectedFriends[0] || null;
+  const secondFriend = selectedFriends[1] || null;
+
+  const visitedSet = useMemo(() => buildVisitedSet(countriesVisited), []);
+  const firstFriendSet = useMemo(
+    () => buildVisitedSet(firstFriend?.visitedCountries || []),
+    [firstFriend]
+  );
+  const secondFriendSet = useMemo(
+    () => buildVisitedSet(secondFriend?.visitedCountries || []),
+    [secondFriend]
   );
 
   const allCountries = useMemo(() => {
@@ -100,24 +108,32 @@ export function MapScreen() {
       .map(([key, displayName]) => ({ key, displayName }))
       .sort((a, b) => a.displayName.localeCompare(b.displayName));
   }, []);
+
   const totalCountriesInView = allCountries.length;
   const userVisitedCountInView = useMemo(
     () => allCountries.reduce((count, country) => count + (visitedSet.has(country.key) ? 1 : 0), 0),
     [allCountries, visitedSet]
   );
-  const friendVisitedCountInView = useMemo(
-    () => allCountries.reduce((count, country) => count + (friendVisitedSet.has(country.key) ? 1 : 0), 0),
-    [allCountries, friendVisitedSet]
+  const firstFriendCountInView = useMemo(
+    () => allCountries.reduce((count, country) => count + (firstFriendSet.has(country.key) ? 1 : 0), 0),
+    [allCountries, firstFriendSet]
   );
+  const secondFriendCountInView = useMemo(
+    () => allCountries.reduce((count, country) => count + (secondFriendSet.has(country.key) ? 1 : 0), 0),
+    [allCountries, secondFriendSet]
+  );
+
   const userProgressPct = totalCountriesInView > 0 ? (userVisitedCountInView / totalCountriesInView) * 100 : 0;
-  const friendProgressPct = totalCountriesInView > 0 ? (friendVisitedCountInView / totalCountriesInView) * 100 : 0;
+  const firstFriendProgressPct = totalCountriesInView > 0 ? (firstFriendCountInView / totalCountriesInView) * 100 : 0;
+  const secondFriendProgressPct = totalCountriesInView > 0
+    ? (secondFriendCountInView / totalCountriesInView) * 100
+    : 0;
+
+  const hasComparison = selectedFriends.length > 0;
+  const compareButtonLabel = hasComparison ? 'Change' : '+ compare';
 
   return (
-    <ScreenContainer
-      title="Map"
-      contentVariant="plain"
-      hideHeader
-    >
+    <ScreenContainer title="Map" contentVariant="plain" hideHeader>
       <View style={styles.content}>
         <View style={styles.mapFullBleed}>
           <View style={styles.mapOverlaySwitch}>
@@ -159,14 +175,16 @@ export function MapScreen() {
             <View style={styles.globeOffset}>
               <VisitedGlobe
                 visitedCountries={countriesVisited}
-                friendVisitedCountries={selectedFriend?.visitedCountries || []}
+                friendVisitedCountries={firstFriend?.visitedCountries || []}
+                secondFriendVisitedCountries={secondFriend?.visitedCountries || []}
                 height={MAP_HEIGHT}
               />
             </View>
           ) : (
             <VisitedFlatMap
               visitedCountries={countriesVisited}
-              friendVisitedCountries={selectedFriend?.visitedCountries || []}
+              friendVisitedCountries={firstFriend?.visitedCountries || []}
+              secondFriendVisitedCountries={secondFriend?.visitedCountries || []}
               height={MAP_HEIGHT}
             />
           )}
@@ -175,11 +193,22 @@ export function MapScreen() {
         <View style={styles.legendRow}>
           <View style={styles.legendLeft}>
             <View style={styles.legendSwatch} />
-            <Text style={styles.legendText}>{selectedFriend ? 'You' : 'Visited'}</Text>
-            {selectedFriend ? (
+            <Text style={styles.legendText}>{hasComparison ? 'You' : 'Visited'}</Text>
+            {firstFriend ? (
               <>
                 <View style={styles.legendSwatchFriend} />
-                <Text style={styles.legendText}>{selectedFriend.name}</Text>
+                <Text style={styles.legendText}>{firstFriend.name}</Text>
+              </>
+            ) : null}
+            {secondFriend ? (
+              <>
+                <View style={styles.legendSwatchFriendTwo} />
+                <Text style={styles.legendText}>{secondFriend.name}</Text>
+                <View style={styles.legendSwatchAllThree} />
+                <Text style={styles.legendText}>All</Text>
+              </>
+            ) : firstFriend ? (
+              <>
                 <View style={styles.legendSwatchBoth}>
                   <View style={[styles.legendStripe, styles.legendStripeOne]} />
                   <View style={[styles.legendStripe, styles.legendStripeTwo]} />
@@ -192,9 +221,7 @@ export function MapScreen() {
               style={({ pressed }) => [styles.friendButton, pressed && styles.friendButtonPressed]}
               onPress={() => setIsCompareModalOpen(true)}
             >
-              <Text style={styles.friendButtonText}>
-                {selectedFriend ? `+ ${selectedFriend.name}` : '+ compare'}
-              </Text>
+              <Text style={styles.friendButtonText}>{compareButtonLabel}</Text>
             </Pressable>
           </View>
         </View>
@@ -233,7 +260,6 @@ export function MapScreen() {
                         onPress={() => {
                           setCountryGroup(option);
                           setIsRegionMenuOpen(false);
-                          // Region filtering is intentionally not implemented yet.
                         }}
                       >
                         <Text style={styles.regionMenuItemText}>{option}</Text>
@@ -243,7 +269,8 @@ export function MapScreen() {
                 </View>
               ) : null}
             </View>
-            {selectedFriend ? (
+
+            {hasComparison ? (
               <>
                 <View style={styles.visitHeaderColumn}>
                   <View style={styles.visitHeaderContent}>
@@ -258,21 +285,42 @@ export function MapScreen() {
                     </View>
                   </View>
                 </View>
-                <View style={styles.visitHeaderColumn}>
-                  <View style={styles.visitHeaderContent}>
-                    <Text style={styles.tableHeaderText} numberOfLines={1}>
-                      {selectedFriend.name}
-                    </Text>
-                    <View style={styles.headerProgressRow}>
-                      <View style={styles.headerProgressTrack}>
-                        <View style={[styles.headerProgressFillFriend, { width: `${friendProgressPct}%` }]} />
-                      </View>
-                      <Text style={[styles.headerProgressCount, styles.headerProgressCountFriend]}>
-                        {friendVisitedCountInView}
+
+                {firstFriend ? (
+                  <View style={styles.visitHeaderColumn}>
+                    <View style={styles.visitHeaderContent}>
+                      <Text style={styles.tableHeaderText} numberOfLines={1}>
+                        {firstFriend.name}
                       </Text>
+                      <View style={styles.headerProgressRow}>
+                        <View style={styles.headerProgressTrack}>
+                          <View style={[styles.headerProgressFillFriend, { width: `${firstFriendProgressPct}%` }]} />
+                        </View>
+                        <Text style={[styles.headerProgressCount, styles.headerProgressCountFriend]}>
+                          {firstFriendCountInView}
+                        </Text>
+                      </View>
                     </View>
                   </View>
-                </View>
+                ) : null}
+
+                {secondFriend ? (
+                  <View style={styles.visitHeaderColumn}>
+                    <View style={styles.visitHeaderContent}>
+                      <Text style={styles.tableHeaderText} numberOfLines={1}>
+                        {secondFriend.name}
+                      </Text>
+                      <View style={styles.headerProgressRow}>
+                        <View style={styles.headerProgressTrack}>
+                          <View style={[styles.headerProgressFillFriendTwo, { width: `${secondFriendProgressPct}%` }]} />
+                        </View>
+                        <Text style={[styles.headerProgressCount, styles.headerProgressCountFriendTwo]}>
+                          {secondFriendCountInView}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
               </>
             ) : (
               <View style={styles.visitedHeader}>
@@ -294,28 +342,13 @@ export function MapScreen() {
           <ScrollView style={styles.tableScroll} contentContainerStyle={styles.tableScrollContent}>
             {allCountries.map((country, index) => {
               const isVisitedByUser = visitedSet.has(country.key);
-              const isVisitedByFriend = friendVisitedSet.has(country.key);
-              const status: VisitStatus = isVisitedByUser && isVisitedByFriend
-                ? 'both'
-                : isVisitedByUser
-                  ? 'user'
-                  : isVisitedByFriend
-                    ? 'friend'
-                    : 'none';
+              const isVisitedByFirstFriend = firstFriendSet.has(country.key);
+              const isVisitedBySecondFriend = secondFriendSet.has(country.key);
 
               return (
-                <View
-                  key={country.key}
-                  style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
-                >
-                  <Text
-                    style={[
-                      styles.countryNameCell,
-                    ]}
-                  >
-                    {country.displayName}
-                  </Text>
-                  {selectedFriend ? (
+                <View key={country.key} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
+                  <Text style={styles.countryNameCell}>{country.displayName}</Text>
+                  {hasComparison ? (
                     <>
                       <View style={styles.visitCellColumn}>
                         {isVisitedByUser ? (
@@ -325,31 +358,27 @@ export function MapScreen() {
                         ) : null}
                       </View>
                       <View style={styles.visitCellColumn}>
-                        {isVisitedByFriend ? (
+                        {isVisitedByFirstFriend ? (
                           <View style={styles.friendCheckBadge}>
                             <Ionicons name="checkmark" size={15} color="#dc2626" />
                           </View>
                         ) : null}
                       </View>
+                      {secondFriend ? (
+                        <View style={styles.visitCellColumn}>
+                          {isVisitedBySecondFriend ? (
+                            <View style={styles.friendTwoCheckBadge}>
+                              <Ionicons name="checkmark" size={15} color="#15803d" />
+                            </View>
+                          ) : null}
+                        </View>
+                      ) : null}
                     </>
                   ) : (
                     <View style={styles.visitedCell}>
-                      {status === 'user' ? (
+                      {isVisitedByUser ? (
                         <View style={styles.visitedCheckBadge}>
                           <Ionicons name="checkmark" size={15} color={colors.primary} />
-                        </View>
-                      ) : null}
-                      {status === 'friend' ? (
-                        <View style={styles.friendCheckBadge}>
-                          <Ionicons name="checkmark" size={15} color="#dc2626" />
-                        </View>
-                      ) : null}
-                      {status === 'both' ? (
-                        <View style={styles.bothCheckBadge}>
-                          <View style={[styles.badgeStripe, styles.badgeStripeOne]} />
-                          <View style={[styles.badgeStripe, styles.badgeStripeTwo]} />
-                          <View style={[styles.badgeStripe, styles.badgeStripeThree]} />
-                          <Ionicons name="checkmark" size={14} color="#ffffff" />
                         </View>
                       ) : null}
                     </View>
@@ -369,28 +398,45 @@ export function MapScreen() {
           <View style={styles.compareOverlay}>
             <Pressable style={styles.compareBackdrop} onPress={() => setIsCompareModalOpen(false)} />
             <View style={styles.compareCard}>
-              <Text style={styles.compareTitle}>Compare With Friend</Text>
-              {FRIENDS.map((friend) => (
-                <Pressable
-                  key={friend.id}
-                  style={({ pressed }) => [
-                    styles.compareOption,
-                    friend.id === selectedFriendId && styles.compareOptionSelected,
-                    pressed && styles.compareOptionPressed,
-                  ]}
-                  onPress={() => {
-                    setSelectedFriendId(friend.id);
-                    setIsCompareModalOpen(false);
-                  }}
-                >
-                  <Text style={styles.compareOptionName}>{friend.name}</Text>
-                  <Text style={styles.compareOptionMeta}>{friend.visitedCountries.length} countries</Text>
-                </Pressable>
-              ))}
+              <Text style={styles.compareTitle}>Compare With Up To 2 Friends</Text>
+              <Text style={styles.compareSubtitle}>Select one or two friends.</Text>
+              {FRIENDS.map((friend) => {
+                const isSelected = selectedFriendIds.includes(friend.id);
+                const isDisabled = selectedFriendIds.length >= 2 && !isSelected;
+                return (
+                  <Pressable
+                    key={friend.id}
+                    style={({ pressed }) => [
+                      styles.compareOption,
+                      isSelected && styles.compareOptionSelected,
+                      isDisabled && styles.compareOptionDisabled,
+                      pressed && !isDisabled && styles.compareOptionPressed,
+                    ]}
+                    onPress={() => {
+                      if (isDisabled) return;
+                      setSelectedFriendIds((prev) => {
+                        if (prev.includes(friend.id)) {
+                          return prev.filter((id) => id !== friend.id);
+                        }
+                        return [...prev, friend.id];
+                      });
+                    }}
+                  >
+                    <Text style={styles.compareOptionName}>{friend.name}</Text>
+                    <Text style={styles.compareOptionMeta}>{friend.visitedCountries.length} countries</Text>
+                  </Pressable>
+                );
+              })}
+              <Pressable
+                style={({ pressed }) => [styles.compareDoneButton, pressed && styles.compareDoneButtonPressed]}
+                onPress={() => setIsCompareModalOpen(false)}
+              >
+                <Text style={styles.compareDoneButtonText}>Done</Text>
+              </Pressable>
               <Pressable
                 style={({ pressed }) => [styles.compareClearButton, pressed && styles.compareClearButtonPressed]}
                 onPress={() => {
-                  setSelectedFriendId(null);
+                  setSelectedFriendIds([]);
                   setIsCompareModalOpen(false);
                 }}
               >
@@ -458,6 +504,7 @@ const styles = StyleSheet.create({
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
   },
   legendLeft: {
     flexDirection: 'row',
@@ -476,6 +523,12 @@ const styles = StyleSheet.create({
     borderRadius: 3,
     backgroundColor: '#ef4444',
   },
+  legendSwatchFriendTwo: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
+  },
   legendSwatchBoth: {
     width: 14,
     height: 14,
@@ -483,6 +536,12 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
     backgroundColor: '#2563eb',
+  },
+  legendSwatchAllThree: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: '#8b5cf6',
   },
   legendStripe: {
     position: 'absolute',
@@ -625,8 +684,8 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   visitedHeader: {
-    width: 86,
-    paddingHorizontal: 12,
+    width: 92,
+    paddingHorizontal: 10,
     paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
@@ -634,7 +693,7 @@ const styles = StyleSheet.create({
     borderLeftColor: colors.border,
   },
   visitHeaderColumn: {
-    width: 84,
+    width: 88,
     paddingHorizontal: 8,
     paddingVertical: 6,
     alignItems: 'center',
@@ -671,6 +730,11 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     backgroundColor: '#ef4444',
   },
+  headerProgressFillFriendTwo: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#22c55e',
+  },
   headerProgressCount: {
     minWidth: 14,
     textAlign: 'right',
@@ -682,6 +746,9 @@ const styles = StyleSheet.create({
   },
   headerProgressCountFriend: {
     color: '#ef4444',
+  },
+  headerProgressCountFriendTwo: {
+    color: '#22c55e',
   },
   tableHeaderText: {
     color: colors.text,
@@ -706,7 +773,7 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
   visitedCell: {
-    width: 86,
+    width: 92,
     alignItems: 'center',
     justifyContent: 'center',
     borderLeftWidth: 1,
@@ -714,7 +781,7 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
   },
   visitCellColumn: {
-    width: 84,
+    width: 88,
     alignItems: 'center',
     justifyContent: 'center',
     borderLeftWidth: 1,
@@ -741,34 +808,15 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#fca5a5',
   },
-  bothCheckBadge: {
+  friendTwoCheckBadge: {
     width: 22,
     height: 22,
     borderRadius: 999,
     alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden',
-    position: 'relative',
-    backgroundColor: '#2563eb',
+    backgroundColor: '#dcfce7',
     borderWidth: 1,
-    borderColor: '#93c5fd',
-  },
-  badgeStripe: {
-    position: 'absolute',
-    width: 6,
-    height: 30,
-    backgroundColor: '#ef4444',
-    transform: [{ rotate: '-35deg' }],
-    top: -4,
-  },
-  badgeStripeOne: {
-    left: 2,
-  },
-  badgeStripeTwo: {
-    left: 9,
-  },
-  badgeStripeThree: {
-    left: 16,
+    borderColor: '#86efac',
   },
   compareOverlay: {
     flex: 1,
@@ -791,6 +839,10 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: colors.text,
+  },
+  compareSubtitle: {
+    fontSize: 12,
+    color: colors.mutedText,
     marginBottom: 4,
   },
   compareOption: {
@@ -808,6 +860,9 @@ const styles = StyleSheet.create({
   compareOptionPressed: {
     backgroundColor: '#f8fafc',
   },
+  compareOptionDisabled: {
+    opacity: 0.45,
+  },
   compareOptionName: {
     fontSize: 14,
     fontWeight: '600',
@@ -817,6 +872,24 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: colors.mutedText,
     marginTop: 2,
+  },
+  compareDoneButton: {
+    marginTop: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#bfdbfe',
+    backgroundColor: '#eff6ff',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  compareDoneButtonPressed: {
+    backgroundColor: '#dbeafe',
+  },
+  compareDoneButtonText: {
+    color: '#1d4ed8',
+    fontSize: 13,
+    fontWeight: '600',
   },
   compareClearButton: {
     marginTop: 4,

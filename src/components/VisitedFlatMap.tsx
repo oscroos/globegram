@@ -7,12 +7,18 @@ import worldGeoJsonData from '../data/world.json';
 type VisitedFlatMapProps = {
   visitedCountries: string[];
   friendVisitedCountries?: string[];
+  secondFriendVisitedCountries?: string[];
   height?: number;
 };
 
-function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: string[]) {
+function buildFlatMapHtml(
+  visitedCountries: string[],
+  friendVisitedCountries: string[],
+  secondFriendVisitedCountries: string[]
+) {
   const visitedJson = JSON.stringify(visitedCountries);
   const friendVisitedJson = JSON.stringify(friendVisitedCountries);
+  const secondFriendVisitedJson = JSON.stringify(secondFriendVisitedCountries);
   const worldGeoJson = JSON.stringify(worldGeoJsonData);
 
   return `
@@ -64,6 +70,7 @@ function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: st
     <script>
       const visited = ${visitedJson};
       const friendVisited = ${friendVisitedJson};
+      const secondFriendVisited = ${secondFriendVisitedJson};
       const world = ${worldGeoJson};
       const normalizeCountryName = (name) => {
         const n = (name || '').trim().toLowerCase();
@@ -71,6 +78,7 @@ function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: st
       };
       const visitedSet = new Set(visited.map((name) => normalizeCountryName(name)));
       const friendVisitedSet = new Set(friendVisited.map((name) => normalizeCountryName(name)));
+      const secondFriendVisitedSet = new Set(secondFriendVisited.map((name) => normalizeCountryName(name)));
 
       const host = document.getElementById('flatMap');
       const tooltip = document.getElementById('tooltip');
@@ -83,7 +91,9 @@ function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: st
       const POLAR_Y_STRETCH = 0.5;
       const HORIZONTAL_MAP_PADDING = 10;
       const VISITED_TILE_COLOR = '#2563eb';
-      const FRIEND_TILE_COLOR = '#ef4444';
+      const FRIEND_ONE_TILE_COLOR = '#ef4444';
+      const FRIEND_TWO_TILE_COLOR = '#22c55e';
+      const ALL_THREE_TILE_COLOR = '#8b5cf6';
       const UNVISITED_TILE_COLOR = '#b3bac6';
       let viewportWidth = 0;
       let viewportHeight = 0;
@@ -136,8 +146,12 @@ function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: st
         }
       };
 
-      appendOverlapPattern('overlap-stripes', VISITED_TILE_COLOR, FRIEND_TILE_COLOR);
-      appendOverlapPattern('overlap-stripes-selected', darkenHex(VISITED_TILE_COLOR), darkenHex(FRIEND_TILE_COLOR));
+      appendOverlapPattern('overlap-user-friend1', VISITED_TILE_COLOR, FRIEND_ONE_TILE_COLOR);
+      appendOverlapPattern('overlap-user-friend1-selected', darkenHex(VISITED_TILE_COLOR), darkenHex(FRIEND_ONE_TILE_COLOR));
+      appendOverlapPattern('overlap-user-friend2', VISITED_TILE_COLOR, FRIEND_TWO_TILE_COLOR);
+      appendOverlapPattern('overlap-user-friend2-selected', darkenHex(VISITED_TILE_COLOR), darkenHex(FRIEND_TWO_TILE_COLOR));
+      appendOverlapPattern('overlap-friend1-friend2', FRIEND_ONE_TILE_COLOR, FRIEND_TWO_TILE_COLOR);
+      appendOverlapPattern('overlap-friend1-friend2-selected', darkenHex(FRIEND_ONE_TILE_COLOR), darkenHex(FRIEND_TWO_TILE_COLOR));
 
       const getCountryName = (feature) => {
         if (!feature || !feature.properties) return '';
@@ -146,29 +160,39 @@ function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: st
         return normalizeCountryName(name);
       };
 
-      const getCountryStatus = (feature) => {
+      const getCountryMask = (feature) => {
         const countryName = getCountryName(feature);
-        const isVisitedByUser = visitedSet.has(countryName);
-        const isVisitedByFriend = friendVisitedSet.has(countryName);
-        if (isVisitedByUser && isVisitedByFriend) return 'both';
-        if (isVisitedByUser) return 'user';
-        if (isVisitedByFriend) return 'friend';
-        return 'none';
+        const hasUser = visitedSet.has(countryName);
+        const hasFriendOne = friendVisitedSet.has(countryName);
+        const hasFriendTwo = secondFriendVisitedSet.has(countryName);
+        return (hasUser ? 1 : 0) + (hasFriendOne ? 2 : 0) + (hasFriendTwo ? 4 : 0);
       };
 
       const getCountryFill = (feature) => {
-        const status = getCountryStatus(feature);
+        const mask = getCountryMask(feature);
         const countryName = getCountryName(feature);
         const isSelected = selectedCountryName && countryName === selectedCountryName;
 
-        if (status === 'both') {
-          return isSelected ? 'url(#overlap-stripes-selected)' : 'url(#overlap-stripes)';
-        }
-        if (status === 'user') {
+        if (mask === 1) {
           return isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR;
         }
-        if (status === 'friend') {
-          return isSelected ? darkenHex(FRIEND_TILE_COLOR) : FRIEND_TILE_COLOR;
+        if (mask === 2) {
+          return isSelected ? darkenHex(FRIEND_ONE_TILE_COLOR) : FRIEND_ONE_TILE_COLOR;
+        }
+        if (mask === 4) {
+          return isSelected ? darkenHex(FRIEND_TWO_TILE_COLOR) : FRIEND_TWO_TILE_COLOR;
+        }
+        if (mask === 3) {
+          return isSelected ? 'url(#overlap-user-friend1-selected)' : 'url(#overlap-user-friend1)';
+        }
+        if (mask === 5) {
+          return isSelected ? 'url(#overlap-user-friend2-selected)' : 'url(#overlap-user-friend2)';
+        }
+        if (mask === 6) {
+          return isSelected ? 'url(#overlap-friend1-friend2-selected)' : 'url(#overlap-friend1-friend2)';
+        }
+        if (mask === 7) {
+          return isSelected ? darkenHex(ALL_THREE_TILE_COLOR) : ALL_THREE_TILE_COLOR;
         }
         return isSelected ? darkenHex(UNVISITED_TILE_COLOR) : UNVISITED_TILE_COLOR;
       };
@@ -396,14 +420,15 @@ function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: st
 export function VisitedFlatMap({
   visitedCountries,
   friendVisitedCountries = [],
+  secondFriendVisitedCountries = [],
   height = 340,
 }: VisitedFlatMapProps) {
   const source = useMemo(
     () => ({
-      html: buildFlatMapHtml(visitedCountries, friendVisitedCountries),
+      html: buildFlatMapHtml(visitedCountries, friendVisitedCountries, secondFriendVisitedCountries),
       baseUrl: 'https://unpkg.com/',
     }),
-    [visitedCountries, friendVisitedCountries]
+    [visitedCountries, friendVisitedCountries, secondFriendVisitedCountries]
   );
 
   return (

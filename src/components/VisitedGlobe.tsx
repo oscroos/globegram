@@ -5,16 +5,23 @@ import worldGeoJsonData from '../data/world.json';
 
 // Original geojson data is from: https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/world.geojson
 // Later been extended with some missing countries from: https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson
+// Polygons are edited with this tool: https://geojson.io/#map=3.6/48/6.99
 
 type VisitedGlobeProps = {
   visitedCountries: string[];
   friendVisitedCountries?: string[];
+  secondFriendVisitedCountries?: string[];
   height?: number;
 };
 
-function buildGlobeHtml(visitedCountries: string[], friendVisitedCountries: string[]) {
+function buildGlobeHtml(
+  visitedCountries: string[],
+  friendVisitedCountries: string[],
+  secondFriendVisitedCountries: string[]
+) {
   const visitedJson = JSON.stringify(visitedCountries);
   const friendVisitedJson = JSON.stringify(friendVisitedCountries);
+  const secondFriendVisitedJson = JSON.stringify(secondFriendVisitedCountries);
   const worldGeoJson = JSON.stringify(worldGeoJsonData);
 
   return `
@@ -54,6 +61,7 @@ function buildGlobeHtml(visitedCountries: string[], friendVisitedCountries: stri
     <script>
       const visited = ${visitedJson};
       const friendVisited = ${friendVisitedJson};
+      const secondFriendVisited = ${secondFriendVisitedJson};
       const world = ${worldGeoJson};
       const normalizeCountryName = (name) => {
         const normalized = (name || '').trim().toLowerCase();
@@ -63,9 +71,12 @@ function buildGlobeHtml(visitedCountries: string[], friendVisitedCountries: stri
 
       const visitedSet = new Set(visited.map((country) => normalizeCountryName(country)));
       const friendVisitedSet = new Set(friendVisited.map((country) => normalizeCountryName(country)));
+      const secondFriendVisitedSet = new Set(secondFriendVisited.map((country) => normalizeCountryName(country)));
       let selectedCountryName = '';
       const VISITED_TILE_COLOR = '#2563eb';
-      const FRIEND_TILE_COLOR = '#ef4444';
+      const FRIEND_ONE_TILE_COLOR = '#ef4444';
+      const FRIEND_TWO_TILE_COLOR = '#22c55e';
+      const ALL_THREE_TILE_COLOR = '#8b5cf6';
       const UNVISITED_TILE_COLOR = '#9ca3af';
 
       const darkenHex = (hex, factor = 0.72) => {
@@ -135,14 +146,12 @@ function buildGlobeHtml(visitedCountries: string[], friendVisitedCountries: stri
 
       const materialCache = new Map();
 
-      const getCountryStatus = (feature) => {
+      const getCountryMask = (feature) => {
         const countryName = normalizeCountryName(getCountryName(feature));
-        const isVisitedByUser = visitedSet.has(countryName);
-        const isVisitedByFriend = friendVisitedSet.has(countryName);
-        if (isVisitedByUser && isVisitedByFriend) return 'both';
-        if (isVisitedByUser) return 'user';
-        if (isVisitedByFriend) return 'friend';
-        return 'none';
+        const hasUser = visitedSet.has(countryName);
+        const hasFriendOne = friendVisitedSet.has(countryName);
+        const hasFriendTwo = secondFriendVisitedSet.has(countryName);
+        return (hasUser ? 1 : 0) + (hasFriendOne ? 2 : 0) + (hasFriendTwo ? 4 : 0);
       };
 
       const getSolidMaterial = (color) => {
@@ -188,36 +197,64 @@ function buildGlobeHtml(visitedCountries: string[], friendVisitedCountries: stri
 
       const getCapMaterial = (feature) => {
         const countryName = normalizeCountryName(getCountryName(feature));
-        const status = getCountryStatus(feature);
+        const mask = getCountryMask(feature);
         const isSelected = selectedCountryName && countryName === selectedCountryName;
 
-        if (status === 'both') {
-          const primary = isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR;
-          const secondary = isSelected ? darkenHex(FRIEND_TILE_COLOR) : FRIEND_TILE_COLOR;
-          return getStripedMaterial(primary, secondary);
-        }
-        if (status === 'user') {
+        if (mask === 1) {
           return getSolidMaterial(isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR);
         }
-        if (status === 'friend') {
-          return getSolidMaterial(isSelected ? darkenHex(FRIEND_TILE_COLOR) : FRIEND_TILE_COLOR);
+        if (mask === 2) {
+          return getSolidMaterial(isSelected ? darkenHex(FRIEND_ONE_TILE_COLOR) : FRIEND_ONE_TILE_COLOR);
+        }
+        if (mask === 4) {
+          return getSolidMaterial(isSelected ? darkenHex(FRIEND_TWO_TILE_COLOR) : FRIEND_TWO_TILE_COLOR);
+        }
+        if (mask === 3) {
+          const primary = isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR;
+          const secondary = isSelected ? darkenHex(FRIEND_ONE_TILE_COLOR) : FRIEND_ONE_TILE_COLOR;
+          return getStripedMaterial(primary, secondary);
+        }
+        if (mask === 5) {
+          const primary = isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR;
+          const secondary = isSelected ? darkenHex(FRIEND_TWO_TILE_COLOR) : FRIEND_TWO_TILE_COLOR;
+          return getStripedMaterial(primary, secondary);
+        }
+        if (mask === 6) {
+          const primary = isSelected ? darkenHex(FRIEND_ONE_TILE_COLOR) : FRIEND_ONE_TILE_COLOR;
+          const secondary = isSelected ? darkenHex(FRIEND_TWO_TILE_COLOR) : FRIEND_TWO_TILE_COLOR;
+          return getStripedMaterial(primary, secondary);
+        }
+        if (mask === 7) {
+          return getSolidMaterial(isSelected ? darkenHex(ALL_THREE_TILE_COLOR) : ALL_THREE_TILE_COLOR);
         }
         return getSolidMaterial(isSelected ? darkenHex(UNVISITED_TILE_COLOR) : UNVISITED_TILE_COLOR);
       };
 
       const getCapColorFallback = (feature) => {
         const countryName = normalizeCountryName(getCountryName(feature));
-        const status = getCountryStatus(feature);
+        const mask = getCountryMask(feature);
         const isSelected = selectedCountryName && countryName === selectedCountryName;
 
-        if (status === 'both') {
+        if (mask === 3) {
           return isSelected ? '#7c2d12' : '#7c3aed';
         }
-        if (status === 'user') {
+        if (mask === 5) {
+          return isSelected ? '#14532d' : '#14b8a6';
+        }
+        if (mask === 6) {
+          return isSelected ? '#7f1d1d' : '#f97316';
+        }
+        if (mask === 7) {
+          return isSelected ? darkenHex(ALL_THREE_TILE_COLOR) : ALL_THREE_TILE_COLOR;
+        }
+        if (mask === 1) {
           return isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR;
         }
-        if (status === 'friend') {
-          return isSelected ? darkenHex(FRIEND_TILE_COLOR) : FRIEND_TILE_COLOR;
+        if (mask === 2) {
+          return isSelected ? darkenHex(FRIEND_ONE_TILE_COLOR) : FRIEND_ONE_TILE_COLOR;
+        }
+        if (mask === 4) {
+          return isSelected ? darkenHex(FRIEND_TWO_TILE_COLOR) : FRIEND_TWO_TILE_COLOR;
         }
         return isSelected ? darkenHex(UNVISITED_TILE_COLOR) : UNVISITED_TILE_COLOR;
       };
@@ -362,14 +399,15 @@ function buildGlobeHtml(visitedCountries: string[], friendVisitedCountries: stri
 export function VisitedGlobe({
   visitedCountries,
   friendVisitedCountries = [],
+  secondFriendVisitedCountries = [],
   height = 340,
 }: VisitedGlobeProps) {
   const source = useMemo(
     () => ({
-      html: buildGlobeHtml(visitedCountries, friendVisitedCountries),
+      html: buildGlobeHtml(visitedCountries, friendVisitedCountries, secondFriendVisitedCountries),
       baseUrl: 'https://unpkg.com/',
     }),
-    [visitedCountries, friendVisitedCountries]
+    [visitedCountries, friendVisitedCountries, secondFriendVisitedCountries]
   );
 
   return (
