@@ -8,7 +8,8 @@
     "android": "expo run:android",
     "ios": "expo run:ios",
     "web": "expo start --web",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "geojson:rewind": "node scripts/geojson/rewind-geojson.mjs src/data/world.json --write"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

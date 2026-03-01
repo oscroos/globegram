@@ -1,9 +1,11 @@
-import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 
 import { VisitedFlatMap } from '../components/VisitedFlatMap';
 import { ScreenContainer } from '../components/ScreenContainer';
 import { VisitedGlobe } from '../components/VisitedGlobe';
+import worldGeoJsonData from '../data/world.json';
 import { colors } from '../theme/colors';
 
 const countriesVisited = [
@@ -16,9 +18,99 @@ const countriesVisited = [
   'Cape Verde',
 ];
 const MAP_HEIGHT = 390;
+const REGION_OPTIONS = ['World', 'Europe', 'North America', 'South America', 'Asia', 'Africa', 'Oceania'];
+const FRIENDS = [
+  {
+    id: 'friend-1',
+    name: 'Lina',
+    visitedCountries: ['Norway', 'France', 'Italy', 'Japan', 'Canada', 'Brazil'],
+  },
+  {
+    id: 'friend-2',
+    name: 'Marcus',
+    visitedCountries: ['Germany', 'Spain', 'Portugal', 'Mexico', 'United States of America', 'Argentina'],
+  },
+  {
+    id: 'friend-3',
+    name: 'Aisha',
+    visitedCountries: ['Sweden', 'Denmark', 'United Kingdom', 'India', 'South Africa', 'Australia'],
+  },
+];
+type VisitStatus = 'none' | 'user' | 'friend' | 'both';
+
+type WorldFeature = {
+  properties?: {
+    NAME?: string;
+    ADMIN?: string;
+    name?: string;
+    NAME_LONG?: string;
+  };
+};
+
+function normalizeCountryName(name: string) {
+  const normalized = (name || '').trim().toLowerCase();
+  if (normalized === 'cape verde' || normalized === 'cabo verde') return 'cape verde';
+  return normalized;
+}
+
+function getCountryName(feature: WorldFeature) {
+  const properties = feature?.properties;
+  return (properties?.NAME || properties?.ADMIN || properties?.name || properties?.NAME_LONG || '').trim();
+}
 
 export function MapScreen() {
   const [mapMode, setMapMode] = useState<'globe' | 'flat'>('globe');
+  const [countryGroup, setCountryGroup] = useState('World');
+  const [isRegionMenuOpen, setIsRegionMenuOpen] = useState(false);
+  const [isCompareModalOpen, setIsCompareModalOpen] = useState(false);
+  const [selectedFriendId, setSelectedFriendId] = useState<string | null>(null);
+
+  const selectedFriend = useMemo(
+    () => FRIENDS.find((friend) => friend.id === selectedFriendId) || null,
+    [selectedFriendId]
+  );
+
+  const visitedSet = useMemo(
+    () => new Set(countriesVisited.map((country) => normalizeCountryName(country))),
+    []
+  );
+  const friendVisitedSet = useMemo(
+    () =>
+      new Set(
+        (selectedFriend?.visitedCountries || []).map((country) => normalizeCountryName(country))
+      ),
+    [selectedFriend]
+  );
+
+  const allCountries = useMemo(() => {
+    const byNormalizedName = new Map<string, string>();
+    const features = (worldGeoJsonData?.features || []) as WorldFeature[];
+
+    for (const feature of features) {
+      const rawName = getCountryName(feature);
+      if (!rawName) continue;
+      const normalizedName = normalizeCountryName(rawName);
+      if (!normalizedName) continue;
+      if (!byNormalizedName.has(normalizedName)) {
+        byNormalizedName.set(normalizedName, rawName);
+      }
+    }
+
+    return [...byNormalizedName.entries()]
+      .map(([key, displayName]) => ({ key, displayName }))
+      .sort((a, b) => a.displayName.localeCompare(b.displayName));
+  }, []);
+  const totalCountriesInView = allCountries.length;
+  const userVisitedCountInView = useMemo(
+    () => allCountries.reduce((count, country) => count + (visitedSet.has(country.key) ? 1 : 0), 0),
+    [allCountries, visitedSet]
+  );
+  const friendVisitedCountInView = useMemo(
+    () => allCountries.reduce((count, country) => count + (friendVisitedSet.has(country.key) ? 1 : 0), 0),
+    [allCountries, friendVisitedSet]
+  );
+  const userProgressPct = totalCountriesInView > 0 ? (userVisitedCountInView / totalCountriesInView) * 100 : 0;
+  const friendProgressPct = totalCountriesInView > 0 ? (friendVisitedCountInView / totalCountriesInView) * 100 : 0;
 
   return (
     <ScreenContainer
@@ -34,48 +126,279 @@ export function MapScreen() {
                 style={[styles.modeButton, mapMode === 'globe' && styles.modeButtonActive]}
                 onPress={() => setMapMode('globe')}
               >
-                <Text style={[styles.modeButtonText, mapMode === 'globe' && styles.modeButtonTextActive]}>
-                  Globe
-                </Text>
+                <View style={styles.modeButtonContent}>
+                  <Ionicons
+                    name="globe-outline"
+                    size={12}
+                    color={mapMode === 'globe' ? colors.text : colors.mutedText}
+                  />
+                  <Text style={[styles.modeButtonText, mapMode === 'globe' && styles.modeButtonTextActive]}>
+                    Globe
+                  </Text>
+                </View>
               </Pressable>
               <Pressable
                 style={[styles.modeButton, mapMode === 'flat' && styles.modeButtonActive]}
                 onPress={() => setMapMode('flat')}
               >
-                <Text style={[styles.modeButtonText, mapMode === 'flat' && styles.modeButtonTextActive]}>
-                  Map
-                </Text>
+                <View style={styles.modeButtonContent}>
+                  <Ionicons
+                    name="map-outline"
+                    size={12}
+                    color={mapMode === 'flat' ? colors.text : colors.mutedText}
+                  />
+                  <Text style={[styles.modeButtonText, mapMode === 'flat' && styles.modeButtonTextActive]}>
+                    Map
+                  </Text>
+                </View>
               </Pressable>
             </View>
           </View>
 
           {mapMode === 'globe' ? (
             <View style={styles.globeOffset}>
-              <VisitedGlobe visitedCountries={countriesVisited} height={MAP_HEIGHT} />
+              <VisitedGlobe
+                visitedCountries={countriesVisited}
+                friendVisitedCountries={selectedFriend?.visitedCountries || []}
+                height={MAP_HEIGHT}
+              />
             </View>
           ) : (
-            <VisitedFlatMap visitedCountries={countriesVisited} height={MAP_HEIGHT} />
+            <VisitedFlatMap
+              visitedCountries={countriesVisited}
+              friendVisitedCountries={selectedFriend?.visitedCountries || []}
+              height={MAP_HEIGHT}
+            />
           )}
         </View>
 
         <View style={styles.legendRow}>
           <View style={styles.legendLeft}>
             <View style={styles.legendSwatch} />
-            <Text style={styles.legendText}>Visited</Text>
-            <Pressable style={({ pressed }) => [styles.friendButton, pressed && styles.friendButtonPressed]}>
-              <Text style={styles.friendButtonText}>+ compare</Text>
+            <Text style={styles.legendText}>{selectedFriend ? 'You' : 'Visited'}</Text>
+            {selectedFriend ? (
+              <>
+                <View style={styles.legendSwatchFriend} />
+                <Text style={styles.legendText}>{selectedFriend.name}</Text>
+                <View style={styles.legendSwatchBoth}>
+                  <View style={[styles.legendStripe, styles.legendStripeOne]} />
+                  <View style={[styles.legendStripe, styles.legendStripeTwo]} />
+                  <View style={[styles.legendStripe, styles.legendStripeThree]} />
+                </View>
+                <Text style={styles.legendText}>Both</Text>
+              </>
+            ) : null}
+            <Pressable
+              style={({ pressed }) => [styles.friendButton, pressed && styles.friendButtonPressed]}
+              onPress={() => setIsCompareModalOpen(true)}
+            >
+              <Text style={styles.friendButtonText}>
+                {selectedFriend ? `+ ${selectedFriend.name}` : '+ compare'}
+              </Text>
             </Pressable>
           </View>
         </View>
 
-        <Text style={styles.sectionTitle}>Visited (sample)</Text>
-        <View style={styles.chipsContainer}>
-          {countriesVisited.map((country) => (
-            <View key={country} style={styles.chip}>
-              <Text style={styles.chipText}>{country}</Text>
+        <View style={styles.table}>
+          <View style={styles.tableHeader}>
+            <View style={styles.worldHeaderButton}>
+              <View style={styles.worldHeaderTopRow}>
+                <Pressable
+                  style={({ pressed }) => [styles.regionButton, pressed && styles.regionButtonPressed]}
+                  onPress={() => setIsRegionMenuOpen((prev) => !prev)}
+                >
+                  <View style={styles.regionButtonContent}>
+                    <Text style={styles.regionButtonText}>{countryGroup}</Text>
+                    <Ionicons
+                      name={isRegionMenuOpen ? 'chevron-up' : 'chevron-down'}
+                      size={14}
+                      color={colors.text}
+                    />
+                  </View>
+                </Pressable>
+                <Text style={styles.countryCountText}>{`${allCountries.length}\ncountries`}</Text>
+              </View>
+
+              {isRegionMenuOpen ? (
+                <View style={styles.regionMenu}>
+                  <ScrollView style={styles.regionMenuList} nestedScrollEnabled>
+                    {REGION_OPTIONS.map((option) => (
+                      <Pressable
+                        key={option}
+                        style={({ pressed }) => [
+                          styles.regionMenuItem,
+                          option === countryGroup && styles.regionMenuItemSelected,
+                          pressed && styles.regionMenuItemPressed,
+                        ]}
+                        onPress={() => {
+                          setCountryGroup(option);
+                          setIsRegionMenuOpen(false);
+                          // Region filtering is intentionally not implemented yet.
+                        }}
+                      >
+                        <Text style={styles.regionMenuItemText}>{option}</Text>
+                      </Pressable>
+                    ))}
+                  </ScrollView>
+                </View>
+              ) : null}
             </View>
-          ))}
+            {selectedFriend ? (
+              <>
+                <View style={styles.visitHeaderColumn}>
+                  <View style={styles.visitHeaderContent}>
+                    <Text style={styles.tableHeaderText}>You</Text>
+                    <View style={styles.headerProgressRow}>
+                      <View style={styles.headerProgressTrack}>
+                        <View style={[styles.headerProgressFillYou, { width: `${userProgressPct}%` }]} />
+                      </View>
+                      <Text style={[styles.headerProgressCount, styles.headerProgressCountYou]}>
+                        {userVisitedCountInView}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+                <View style={styles.visitHeaderColumn}>
+                  <View style={styles.visitHeaderContent}>
+                    <Text style={styles.tableHeaderText} numberOfLines={1}>
+                      {selectedFriend.name}
+                    </Text>
+                    <View style={styles.headerProgressRow}>
+                      <View style={styles.headerProgressTrack}>
+                        <View style={[styles.headerProgressFillFriend, { width: `${friendProgressPct}%` }]} />
+                      </View>
+                      <Text style={[styles.headerProgressCount, styles.headerProgressCountFriend]}>
+                        {friendVisitedCountInView}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.visitedHeader}>
+                <View style={styles.visitHeaderContent}>
+                  <Text style={styles.tableHeaderText}>Visited</Text>
+                  <View style={styles.headerProgressRow}>
+                    <View style={styles.headerProgressTrack}>
+                      <View style={[styles.headerProgressFillYou, { width: `${userProgressPct}%` }]} />
+                    </View>
+                    <Text style={[styles.headerProgressCount, styles.headerProgressCountYou]}>
+                      {userVisitedCountInView}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+            )}
+          </View>
+
+          <ScrollView style={styles.tableScroll} contentContainerStyle={styles.tableScrollContent}>
+            {allCountries.map((country, index) => {
+              const isVisitedByUser = visitedSet.has(country.key);
+              const isVisitedByFriend = friendVisitedSet.has(country.key);
+              const status: VisitStatus = isVisitedByUser && isVisitedByFriend
+                ? 'both'
+                : isVisitedByUser
+                  ? 'user'
+                  : isVisitedByFriend
+                    ? 'friend'
+                    : 'none';
+
+              return (
+                <View
+                  key={country.key}
+                  style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}
+                >
+                  <Text
+                    style={[
+                      styles.countryNameCell,
+                    ]}
+                  >
+                    {country.displayName}
+                  </Text>
+                  {selectedFriend ? (
+                    <>
+                      <View style={styles.visitCellColumn}>
+                        {isVisitedByUser ? (
+                          <View style={styles.visitedCheckBadge}>
+                            <Ionicons name="checkmark" size={15} color={colors.primary} />
+                          </View>
+                        ) : null}
+                      </View>
+                      <View style={styles.visitCellColumn}>
+                        {isVisitedByFriend ? (
+                          <View style={styles.friendCheckBadge}>
+                            <Ionicons name="checkmark" size={15} color="#dc2626" />
+                          </View>
+                        ) : null}
+                      </View>
+                    </>
+                  ) : (
+                    <View style={styles.visitedCell}>
+                      {status === 'user' ? (
+                        <View style={styles.visitedCheckBadge}>
+                          <Ionicons name="checkmark" size={15} color={colors.primary} />
+                        </View>
+                      ) : null}
+                      {status === 'friend' ? (
+                        <View style={styles.friendCheckBadge}>
+                          <Ionicons name="checkmark" size={15} color="#dc2626" />
+                        </View>
+                      ) : null}
+                      {status === 'both' ? (
+                        <View style={styles.bothCheckBadge}>
+                          <View style={[styles.badgeStripe, styles.badgeStripeOne]} />
+                          <View style={[styles.badgeStripe, styles.badgeStripeTwo]} />
+                          <View style={[styles.badgeStripe, styles.badgeStripeThree]} />
+                          <Ionicons name="checkmark" size={14} color="#ffffff" />
+                        </View>
+                      ) : null}
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+          </ScrollView>
         </View>
+
+        <Modal
+          visible={isCompareModalOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setIsCompareModalOpen(false)}
+        >
+          <View style={styles.compareOverlay}>
+            <Pressable style={styles.compareBackdrop} onPress={() => setIsCompareModalOpen(false)} />
+            <View style={styles.compareCard}>
+              <Text style={styles.compareTitle}>Compare With Friend</Text>
+              {FRIENDS.map((friend) => (
+                <Pressable
+                  key={friend.id}
+                  style={({ pressed }) => [
+                    styles.compareOption,
+                    friend.id === selectedFriendId && styles.compareOptionSelected,
+                    pressed && styles.compareOptionPressed,
+                  ]}
+                  onPress={() => {
+                    setSelectedFriendId(friend.id);
+                    setIsCompareModalOpen(false);
+                  }}
+                >
+                  <Text style={styles.compareOptionName}>{friend.name}</Text>
+                  <Text style={styles.compareOptionMeta}>{friend.visitedCountries.length} countries</Text>
+                </Pressable>
+              ))}
+              <Pressable
+                style={({ pressed }) => [styles.compareClearButton, pressed && styles.compareClearButtonPressed]}
+                onPress={() => {
+                  setSelectedFriendId(null);
+                  setIsCompareModalOpen(false);
+                }}
+              >
+                <Text style={styles.compareClearButtonText}>Clear comparison</Text>
+              </Pressable>
+            </View>
+          </View>
+        </Modal>
       </View>
     </ScreenContainer>
   );
@@ -118,19 +441,17 @@ const styles = StyleSheet.create({
   modeButtonActive: {
     backgroundColor: colors.surface,
   },
+  modeButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   modeButtonText: {
     fontSize: 13,
     fontWeight: '600',
     color: colors.mutedText,
   },
   modeButtonTextActive: {
-    color: colors.text,
-  },
-  sectionTitle: {
-    marginTop: 12,
-    fontSize: 16,
-    fontWeight: '600',
-    marginBottom: 10,
     color: colors.text,
   },
   legendRow: {
@@ -148,6 +469,37 @@ const styles = StyleSheet.create({
     height: 14,
     borderRadius: 3,
     backgroundColor: '#2563eb',
+  },
+  legendSwatchFriend: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    backgroundColor: '#ef4444',
+  },
+  legendSwatchBoth: {
+    width: 14,
+    height: 14,
+    borderRadius: 3,
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#2563eb',
+  },
+  legendStripe: {
+    position: 'absolute',
+    width: 4,
+    height: 20,
+    backgroundColor: '#ef4444',
+    transform: [{ rotate: '-35deg' }],
+    top: -3,
+  },
+  legendStripeOne: {
+    left: 0,
+  },
+  legendStripeTwo: {
+    left: 5,
+  },
+  legendStripeThree: {
+    left: 10,
   },
   legendText: {
     fontSize: 13,
@@ -171,20 +523,317 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
   },
-  chipsContainer: {
+  table: {
+    marginTop: 14,
+    marginBottom: 10,
+    flex: 1,
+    borderWidth: 1,
+    borderColor: colors.border,
+    borderRadius: 12,
+    overflow: 'hidden',
+    backgroundColor: colors.surface,
+  },
+  tableScroll: {
+    flex: 1,
+  },
+  tableScrollContent: {
+    paddingBottom: 6,
+  },
+  tableHeader: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    backgroundColor: '#f8fafc',
+  },
+  worldHeaderButton: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    position: 'relative',
+    zIndex: 3,
+  },
+  worldHeaderTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  chip: {
+  regionButton: {
     borderRadius: 999,
-    backgroundColor: colors.primarySoft,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
-  chipText: {
-    color: colors.primary,
+  regionButtonPressed: {
+    backgroundColor: '#f3f4f6',
+    borderColor: '#d1d5db',
+  },
+  regionButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  regionButtonText: {
+    fontSize: 13,
+    color: colors.text,
+    fontWeight: '600',
+  },
+  countryCountText: {
+    fontSize: 11,
+    color: colors.mutedText,
+    fontWeight: '500',
+  },
+  regionMenu: {
+    position: 'absolute',
+    top: 40,
+    left: 12,
+    minWidth: 180,
+    maxHeight: 180,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
+    overflow: 'hidden',
+    elevation: 6,
+    shadowColor: '#000000',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+  },
+  regionMenuList: {
+    maxHeight: 180,
+  },
+  regionMenuItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  regionMenuItemSelected: {
+    backgroundColor: '#eff6ff',
+  },
+  regionMenuItemPressed: {
+    backgroundColor: '#f8fafc',
+  },
+  regionMenuItemText: {
+    fontSize: 13,
+    color: colors.text,
+  },
+  visitedHeader: {
+    width: 86,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+  },
+  visitHeaderColumn: {
+    width: 84,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: colors.border,
+  },
+  visitHeaderContent: {
+    width: '100%',
+    alignItems: 'center',
+    gap: 3,
+  },
+  headerProgressRow: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+  },
+  headerProgressTrack: {
+    flex: 1,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: '#e5e7eb',
+    overflow: 'hidden',
+  },
+  headerProgressFillYou: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#2563eb',
+  },
+  headerProgressFillFriend: {
+    height: '100%',
+    borderRadius: 999,
+    backgroundColor: '#ef4444',
+  },
+  headerProgressCount: {
+    minWidth: 14,
+    textAlign: 'right',
+    fontSize: 10,
+    fontWeight: '600',
+  },
+  headerProgressCountYou: {
+    color: '#2563eb',
+  },
+  headerProgressCountFriend: {
+    color: '#ef4444',
+  },
+  tableHeaderText: {
+    color: colors.text,
     fontWeight: '600',
     fontSize: 13,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 38,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f1f5f9',
+  },
+  tableRowAlt: {
+    backgroundColor: '#fbfdff',
+  },
+  countryNameCell: {
+    flex: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 13,
+    color: colors.text,
+  },
+  visitedCell: {
+    width: 86,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: '#f1f5f9',
+    alignSelf: 'stretch',
+  },
+  visitCellColumn: {
+    width: 84,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderLeftWidth: 1,
+    borderLeftColor: '#f1f5f9',
+    alignSelf: 'stretch',
+  },
+  visitedCheckBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#dbeafe',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+  },
+  friendCheckBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fee2e2',
+    borderWidth: 1,
+    borderColor: '#fca5a5',
+  },
+  bothCheckBadge: {
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    position: 'relative',
+    backgroundColor: '#2563eb',
+    borderWidth: 1,
+    borderColor: '#93c5fd',
+  },
+  badgeStripe: {
+    position: 'absolute',
+    width: 6,
+    height: 30,
+    backgroundColor: '#ef4444',
+    transform: [{ rotate: '-35deg' }],
+    top: -4,
+  },
+  badgeStripeOne: {
+    left: 2,
+  },
+  badgeStripeTwo: {
+    left: 9,
+  },
+  badgeStripeThree: {
+    left: 16,
+  },
+  compareOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  compareBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(2, 6, 23, 0.42)',
+  },
+  compareCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: colors.border,
+    backgroundColor: '#ffffff',
+    padding: 14,
+    gap: 8,
+  },
+  compareTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: colors.text,
+    marginBottom: 4,
+  },
+  compareOption: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#ffffff',
+  },
+  compareOptionSelected: {
+    borderColor: '#93c5fd',
+    backgroundColor: '#eff6ff',
+  },
+  compareOptionPressed: {
+    backgroundColor: '#f8fafc',
+  },
+  compareOptionName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.text,
+  },
+  compareOptionMeta: {
+    fontSize: 12,
+    color: colors.mutedText,
+    marginTop: 2,
+  },
+  compareClearButton: {
+    marginTop: 4,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#fecaca',
+    backgroundColor: '#fff1f2',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+  },
+  compareClearButtonPressed: {
+    backgroundColor: '#ffe4e6',
+  },
+  compareClearButtonText: {
+    color: '#be123c',
+    fontSize: 13,
+    fontWeight: '600',
   },
 });

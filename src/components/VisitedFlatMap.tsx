@@ -6,11 +6,13 @@ import worldGeoJsonData from '../data/world.json';
 
 type VisitedFlatMapProps = {
   visitedCountries: string[];
+  friendVisitedCountries?: string[];
   height?: number;
 };
 
-function buildFlatMapHtml(visitedCountries: string[]) {
+function buildFlatMapHtml(visitedCountries: string[], friendVisitedCountries: string[]) {
   const visitedJson = JSON.stringify(visitedCountries);
+  const friendVisitedJson = JSON.stringify(friendVisitedCountries);
   const worldGeoJson = JSON.stringify(worldGeoJsonData);
 
   return `
@@ -61,21 +63,27 @@ function buildFlatMapHtml(visitedCountries: string[]) {
     <div id="tooltip" class="tooltip"></div>
     <script>
       const visited = ${visitedJson};
+      const friendVisited = ${friendVisitedJson};
       const world = ${worldGeoJson};
-      const visitedSet = new Set(visited.map((name) => {
+      const normalizeCountryName = (name) => {
         const n = (name || '').trim().toLowerCase();
-        return n === 'cabo verde' ? 'cape verde' : n;
-      }));
+        return n === 'cabo verde' || n === 'cape verde' ? 'cape verde' : n;
+      };
+      const visitedSet = new Set(visited.map((name) => normalizeCountryName(name)));
+      const friendVisitedSet = new Set(friendVisited.map((name) => normalizeCountryName(name)));
 
       const host = document.getElementById('flatMap');
       const tooltip = document.getElementById('tooltip');
       const svg = d3.select(host).append('svg');
+      const defs = svg.append('defs');
       const layer = svg.append('g');
       const stretchedLayer = layer.append('g');
       const VERTICAL_STRETCH = 1;
       const POLAR_X_STRETCH = 0.5;
       const POLAR_Y_STRETCH = 0.5;
       const HORIZONTAL_MAP_PADDING = 10;
+      const VISITED_TILE_COLOR = '#2563eb';
+      const FRIEND_TILE_COLOR = '#ef4444';
       const UNVISITED_TILE_COLOR = '#b3bac6';
       let viewportWidth = 0;
       let viewportHeight = 0;
@@ -88,13 +96,81 @@ function buildFlatMapHtml(visitedCountries: string[]) {
       let mapBaseRight = 0;
       let mapBaseBottom = 0;
       let currentTransform = d3.zoomIdentity;
+      let selectedCountryName = null;
+
+      const darkenHex = (hex, factor = 0.72) => {
+        const raw = (hex || '').replace('#', '');
+        if (raw.length !== 6) return hex;
+        const toChannel = (idx) => {
+          const value = parseInt(raw.slice(idx, idx + 2), 16);
+          return Math.max(0, Math.min(255, Math.round(value * factor)));
+        };
+        const r = toChannel(0).toString(16).padStart(2, '0');
+        const g = toChannel(2).toString(16).padStart(2, '0');
+        const b = toChannel(4).toString(16).padStart(2, '0');
+        return '#' + r + g + b;
+      };
+
+      const appendOverlapPattern = (id, first, second) => {
+        const TILE_SIZE = 32;
+        const STRIPE_SPACING = 8;
+        const STRIPE_WIDTH = 4;
+        const pattern = defs
+          .append('pattern')
+          .attr('id', id)
+          .attr('patternUnits', 'userSpaceOnUse')
+          .attr('width', TILE_SIZE)
+          .attr('height', TILE_SIZE);
+
+        pattern.append('rect').attr('width', TILE_SIZE).attr('height', TILE_SIZE).attr('fill', first);
+
+        for (let x = -TILE_SIZE; x <= TILE_SIZE * 2; x += STRIPE_SPACING) {
+          pattern
+            .append('line')
+            .attr('x1', x)
+            .attr('y1', 0)
+            .attr('x2', x - TILE_SIZE)
+            .attr('y2', TILE_SIZE)
+            .attr('stroke', second)
+            .attr('stroke-width', STRIPE_WIDTH);
+        }
+      };
+
+      appendOverlapPattern('overlap-stripes', VISITED_TILE_COLOR, FRIEND_TILE_COLOR);
+      appendOverlapPattern('overlap-stripes-selected', darkenHex(VISITED_TILE_COLOR), darkenHex(FRIEND_TILE_COLOR));
 
       const getCountryName = (feature) => {
         if (!feature || !feature.properties) return '';
         const p = feature.properties;
         const name = p.NAME || p.ADMIN || p.name || p.NAME_LONG || '';
-        const n = (name || '').trim().toLowerCase();
-        return n === 'cabo verde' ? 'cape verde' : n;
+        return normalizeCountryName(name);
+      };
+
+      const getCountryStatus = (feature) => {
+        const countryName = getCountryName(feature);
+        const isVisitedByUser = visitedSet.has(countryName);
+        const isVisitedByFriend = friendVisitedSet.has(countryName);
+        if (isVisitedByUser && isVisitedByFriend) return 'both';
+        if (isVisitedByUser) return 'user';
+        if (isVisitedByFriend) return 'friend';
+        return 'none';
+      };
+
+      const getCountryFill = (feature) => {
+        const status = getCountryStatus(feature);
+        const countryName = getCountryName(feature);
+        const isSelected = selectedCountryName && countryName === selectedCountryName;
+
+        if (status === 'both') {
+          return isSelected ? 'url(#overlap-stripes-selected)' : 'url(#overlap-stripes)';
+        }
+        if (status === 'user') {
+          return isSelected ? darkenHex(VISITED_TILE_COLOR) : VISITED_TILE_COLOR;
+        }
+        if (status === 'friend') {
+          return isSelected ? darkenHex(FRIEND_TILE_COLOR) : FRIEND_TILE_COLOR;
+        }
+        return isSelected ? darkenHex(UNVISITED_TILE_COLOR) : UNVISITED_TILE_COLOR;
       };
 
       const projection = d3.geoNaturalEarth1();
@@ -128,6 +204,18 @@ function buildFlatMapHtml(visitedCountries: string[]) {
         mapBaseTop = (viewportHeight - mapBaseHeight) / 2;
         mapBaseRight = mapBaseLeft + mapBaseWidth;
         mapBaseBottom = mapBaseTop + mapBaseHeight;
+      }
+
+      function updateCountryVisualState() {
+        stretchedLayer.selectAll('path.country')
+          .attr('fill', (d) => getCountryFill(d))
+          .attr('stroke', (d) => {
+            return '#e5e7eb';
+          })
+          .attr('stroke-width', (d) => {
+            const countryName = getCountryName(d);
+            return selectedCountryName && countryName === selectedCountryName ? 1.2 : 0.45;
+          });
       }
 
       function render() {
@@ -182,17 +270,27 @@ function buildFlatMapHtml(visitedCountries: string[]) {
           .join('path')
           .attr('class', 'country')
           .attr('d', polarPath)
-          .attr('fill', (d) => visitedSet.has(getCountryName(d)) ? '#2563eb' : UNVISITED_TILE_COLOR)
-          .attr('stroke', '#e5e7eb')
-          .attr('stroke-width', 0.45)
           .attr('vector-effect', 'non-scaling-stroke')
           .on('click', (event, d) => {
             const rawName = ((d && d.properties && (d.properties.NAME || d.properties.ADMIN || d.properties.name || d.properties.NAME_LONG)) || 'Unknown');
+            const clickedCountryName = getCountryName(d);
+            if (selectedCountryName && clickedCountryName === selectedCountryName) {
+              selectedCountryName = null;
+              updateCountryVisualState();
+              tooltip.style.display = 'none';
+              event.stopPropagation();
+              return;
+            }
+            selectedCountryName = clickedCountryName;
+            updateCountryVisualState();
             tooltip.textContent = rawName;
             tooltip.style.display = 'block';
             tooltip.style.left = event.clientX + 'px';
             tooltip.style.top = event.clientY + 'px';
+            event.stopPropagation();
           });
+
+        updateCountryVisualState();
 
         if (currentTransform.k <= 1.0001) {
           currentTransform = d3.zoomIdentity;
@@ -278,6 +376,8 @@ function buildFlatMapHtml(visitedCountries: string[]) {
 
       svg.on('click', (event) => {
         if (event.target && event.target.tagName !== 'path') {
+          selectedCountryName = null;
+          updateCountryVisualState();
           tooltip.style.display = 'none';
         }
       });
@@ -293,13 +393,17 @@ function buildFlatMapHtml(visitedCountries: string[]) {
   `;
 }
 
-export function VisitedFlatMap({ visitedCountries, height = 340 }: VisitedFlatMapProps) {
+export function VisitedFlatMap({
+  visitedCountries,
+  friendVisitedCountries = [],
+  height = 340,
+}: VisitedFlatMapProps) {
   const source = useMemo(
     () => ({
-      html: buildFlatMapHtml(visitedCountries),
+      html: buildFlatMapHtml(visitedCountries, friendVisitedCountries),
       baseUrl: 'https://unpkg.com/',
     }),
-    [visitedCountries]
+    [visitedCountries, friendVisitedCountries]
   );
 
   return (
