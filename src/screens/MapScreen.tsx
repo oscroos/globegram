@@ -19,7 +19,7 @@ const countriesVisited = [
 ];
 
 const MAP_HEIGHT = 390;
-const REGION_OPTIONS = ['World', 'Europe', 'North America', 'South America', 'Asia', 'Africa', 'Oceania'];
+const REGION_OPTIONS = ['World', 'Europe', 'N. America', 'S. America', 'Asia', 'Africa', 'Oceania'];
 const FRIENDS = [
   {
     id: 'friend-1',
@@ -133,7 +133,7 @@ export function MapScreen() {
   const compareButtonLabel = hasComparison ? 'Change' : '+ compare';
 
   return (
-    <ScreenContainer title="Map" contentVariant="plain" hideHeader>
+    <ScreenContainer title="Map" contentVariant="plain" hideHeader flushBottom>
       <View style={styles.content}>
         <View style={styles.mapFullBleed}>
           <View style={styles.mapOverlaySwitch}>
@@ -229,7 +229,7 @@ export function MapScreen() {
         <View style={styles.table}>
           <View style={styles.tableHeader}>
             <View style={styles.worldHeaderButton}>
-              <View style={styles.worldHeaderTopRow}>
+              <View style={styles.regionControlWrap}>
                 <Pressable
                   style={({ pressed }) => [styles.regionButton, pressed && styles.regionButtonPressed]}
                   onPress={() => setIsRegionMenuOpen((prev) => !prev)}
@@ -243,7 +243,7 @@ export function MapScreen() {
                     />
                   </View>
                 </Pressable>
-                <Text style={styles.countryCountText}>{`${allCountries.length}\ncountries`}</Text>
+                <Text style={styles.countryCountText}>{`${allCountries.length} countries`}</Text>
               </View>
 
               {isRegionMenuOpen ? (
@@ -289,9 +289,9 @@ export function MapScreen() {
                 {firstFriend ? (
                   <View style={styles.visitHeaderColumn}>
                     <View style={styles.visitHeaderContent}>
-                      <Text style={styles.tableHeaderText} numberOfLines={1}>
-                        {firstFriend.name}
-                      </Text>
+                    <Text style={styles.tableHeaderText} numberOfLines={1}>
+                      {firstFriend.name}
+                    </Text>
                       <View style={styles.headerProgressRow}>
                         <View style={styles.headerProgressTrack}>
                           <View style={[styles.headerProgressFillFriend, { width: `${firstFriendProgressPct}%` }]} />
@@ -307,9 +307,9 @@ export function MapScreen() {
                 {secondFriend ? (
                   <View style={styles.visitHeaderColumn}>
                     <View style={styles.visitHeaderContent}>
-                      <Text style={styles.tableHeaderText} numberOfLines={1}>
-                        {secondFriend.name}
-                      </Text>
+                    <Text style={styles.tableHeaderText} numberOfLines={1}>
+                      {secondFriend.name}
+                    </Text>
                       <View style={styles.headerProgressRow}>
                         <View style={styles.headerProgressTrack}>
                           <View style={[styles.headerProgressFillFriendTwo, { width: `${secondFriendProgressPct}%` }]} />
@@ -347,7 +347,9 @@ export function MapScreen() {
 
               return (
                 <View key={country.key} style={[styles.tableRow, index % 2 === 1 && styles.tableRowAlt]}>
-                  <Text style={styles.countryNameCell}>{country.displayName}</Text>
+                  <Text style={styles.countryNameCell}>
+                    {country.displayName}
+                  </Text>
                   {hasComparison ? (
                     <>
                       <View style={styles.visitCellColumn}>
@@ -584,13 +586,18 @@ const styles = StyleSheet.create({
   },
   table: {
     marginTop: 14,
-    marginBottom: 10,
+    marginBottom: 0,
+    marginHorizontal: -20,
     flex: 1,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: 12,
+    borderWidth: 0,
+    borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: colors.surface,
+    backgroundColor: '#ffffff',
+    shadowColor: '#0f172a',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 3,
   },
   tableScroll: {
     flex: 1,
@@ -602,22 +609,26 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    borderBottomColor: '#e2e8f0',
     backgroundColor: '#f8fafc',
   },
   worldHeaderButton: {
     flex: 1,
     paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingTop: 4,
+    paddingBottom: 4,
     alignItems: 'flex-start',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     position: 'relative',
     zIndex: 3,
+    minWidth: 0,
+  },
+  regionControlWrap: {
+    alignItems: 'center',
+    alignSelf: 'flex-start',
   },
   worldHeaderTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    width: '100%',
   },
   regionButton: {
     borderRadius: 999,
@@ -625,7 +636,8 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     backgroundColor: '#ffffff',
     paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingVertical: 4,
+    marginBottom: 2,
   },
   regionButtonPressed: {
     backgroundColor: '#f3f4f6',
@@ -642,9 +654,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   countryCountText: {
-    fontSize: 11,
+    marginTop: 1,
+    fontSize: 10,
+    lineHeight: 10,
+    textAlign: 'center',
     color: colors.mutedText,
-    fontWeight: '500',
+    fontWeight: '600',
   },
   regionMenu: {
     position: 'absolute',
@@ -705,6 +720,7 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     gap: 3,
+    minWidth: 0,
   },
   headerProgressRow: {
     width: '100%',
@@ -754,22 +770,27 @@ const styles = StyleSheet.create({
     color: colors.text,
     fontWeight: '600',
     fontSize: 13,
+    maxWidth: '100%',
   },
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    minHeight: 38,
+    minHeight: 42,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f5f9',
+    borderBottomColor: '#edf2f7',
+    overflow: 'hidden',
   },
   tableRowAlt: {
-    backgroundColor: '#fbfdff',
+    backgroundColor: '#fcfdff',
   },
   countryNameCell: {
     flex: 1,
+    minWidth: 0,
+    flexShrink: 1,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 13,
+    lineHeight: 18,
     color: colors.text,
   },
   visitedCell: {

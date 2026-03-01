@@ -9,6 +9,7 @@ type ScreenContainerProps = PropsWithChildren<{
   subtitle?: string;
   contentVariant?: 'card' | 'plain';
   hideHeader?: boolean;
+  flushBottom?: boolean;
 }>;
 
 export function ScreenContainer({
@@ -16,6 +17,7 @@ export function ScreenContainer({
   subtitle,
   contentVariant = 'card',
   hideHeader = false,
+  flushBottom = false,
   children,
 }: ScreenContainerProps) {
   const insets = useSafeAreaInsets();
@@ -26,7 +28,7 @@ export function ScreenContainer({
         styles.screen,
         {
           paddingTop: insets.top + 12,
-          paddingBottom: Math.max(insets.bottom, 12),
+          paddingBottom: flushBottom ? 0 : Math.max(insets.bottom, 12),
         },
       ]}
     >
